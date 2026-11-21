@@ -1,308 +1,374 @@
+import React, { useEffect, useState } from 'react'; import { useLanguage } from '../context/LanguageContext';
+export default function DriverDashboard({ token }) { const { t } = useLanguage();
+const [rides, setRides] = useState([]); const [lostItems, setLostItems] = useState([]); const [loading, setLoading] = useState(true); const [replies, setReplies] = useState({}); const [statuses, setStatuses] = useState({}); const [offerInputs, setOfferInputs] = useState({});
+const translateStatus = (status) => { const statusKeys = { requested: 'requested', accepted: 'accepted', completed: 'completed', cancelled: 'cancelled', reported: 'reported', under_review: 'underReview', found: 'found', not_found: 'notFound', resolved: 'resolved', };
+return statusKeys[status] ? t(statusKeys[status]) : status;
+};
+// Fetch rides const fetchPendingRides = async () => { if (!token) return;
+try {
+  const [pendingRes, driverRes] = await Promise.all([
+    fetch('http://localhost:5000/api/rides/pending', {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+    fetch('http://localhost:5000/api/rides/driver', {
+      headers: { Authorization: Bearer ${token} },
+    }),
+  ]);
 
-import React, { useEffect, useState } from 'react';
-import { useLanguage } from '../context/LanguageContext';
+  const pendingData = await pendingRes.json();
+  const driverData = await driverRes.json();
 
-export default function DriverDashboard({ token }) {
-  const { t } = useLanguage();
-
-  const [rides, setRides] = useState([]);
-  const [lostItems, setLostItems] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [replies, setReplies] = useState({});
-  const [statuses, setStatuses] = useState({});
-
-  const translateStatus = (status) => {
-    const statusKeys = {
-      requested: 'requested',
-      accepted: 'accepted',
-      completed: 'completed',
-      cancelled: 'cancelled',
-      reported: 'reported',
-      under_review: 'underReview',
-      found: 'found',
-      not_found: 'notFound',
-      resolved: 'resolved',
-    };
-
-    return statusKeys[status] ? t(statusKeys[status]) : status;
-  };
-
-  const fetchPendingRides = async () => {
-    if (!token) return;
-
-    try {
-      const [pendingRes, driverRes] = await Promise.all([
-        fetch('http://localhost:5000/api/rides/pending', {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch('http://localhost:5000/api/rides/driver', {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-      ]);
-
-      const pendingData = await pendingRes.json();
-      const driverData = await driverRes.json();
-
-      if (pendingRes.ok && driverRes.ok) {
-        setRides([...pendingData, ...driverData]);
-      } else {
-        console.error('Error fetching rides:', pendingData, driverData);
-      }
-    } catch (err) {
-      console.error('Error fetching rides:', err);
-    } finally {
-      setLoading(false);
+  if (pendingRes.ok && driverRes.ok) {
+    setRides([...pendingData, ...driverData]);
+  } else {
+    console.error('Error fetching rides:', pendingData, driverData);
+  }
+} catch (err) {
+  console.error('Error fetching rides:', err);
+} finally {
+  setLoading(false);
+}
+};
+// Fetch lost items const fetchDriverLostItems = async () => { if (!token) return;
+try {
+  const res = await fetch(
+    'http://localhost:5000/api/lost-items/driver',
+    {
+      headers: { Authorization: Bearer ${token} },
     }
-  };
+  );
 
-  const fetchDriverLostItems = async () => {
-    if (!token) return;
+  const data = await res.json();
 
-    try {
-      const res = await fetch(
-        'http://localhost:5000/api/lost-items/driver',
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+  if (res.ok) {
+    setLostItems(data);
+  } else {
+    console.error('Error fetching lost items:', data);
+  }
+} catch (err) {
+  console.error('Error fetching lost items:', err);
+}
+};
+// Submit driver's price offer const handleOffer = async (rideId) => { const offerAmount = Number(offerInputs[rideId]);
+if (!Number.isFinite(offerAmount) || offerAmount <= 0) {
+  alert('يرجى إدخال سعر صحيح');
+  return;
+}
 
-      const data = await res.json();
-
-      if (res.ok) {
-        setLostItems(data);
-      } else {
-        console.error('Error fetching lost items:', data);
-      }
-    } catch (err) {
-      console.error('Error fetching lost items:', err);
+try {
+  const res = await fetch(
+    http://localhost:5000/api/rides/${rideId}/offer,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: Bearer ${token},
+      },
+      body: JSON.stringify({ offerAmount }),
     }
-  };
+  );
 
-  const handleAccept = async (rideId) => {
-    try {
-      const res = await fetch(
-        `http://localhost:5000/api/rides/${rideId}/accept`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+  const data = await res.json();
 
-      const data = await res.json();
+  if (res.ok) {
+    alert('تم إرسال عرض السعر');
+    setOfferInputs((prev) => ({
+      ...prev,
+      [rideId]: '',
+    }));
+    fetchPendingRides();
+  } else {
+    alert(data.error || 'فشل إرسال العرض');
+  }
+} catch (err) {
+  alert(t('serverError'));
+}
+};
+// Accept rider's last offer const handleAgreeFare = async (rideId) => { try { const res = await fetch( http://localhost:5000/api/rides/${rideId}/agree-fare, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: Bearer ${token}, }, } );
+  const data = await res.json();
 
-      if (res.ok) {
-        fetchPendingRides();
-      } else {
-        alert(data.error || 'Failed to accept ride');
-      }
-    } catch (err) {
-      alert(t('serverError'));
-    }
-  };
+  if (res.ok) {
+    alert('تم الاتفاق على السعر');
+    fetchPendingRides();
+  } else {
+    alert(data.error || 'فشل قبول السعر');
+  }
+} catch (err) {
+  alert(t('serverError'));
+}
+};
+// Accept ride after fare agreement const handleAccept = async (rideId) => { try { const res = await fetch( http://localhost:5000/api/rides/${rideId}/accept, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: Bearer ${token}, }, } );
+  const data = await res.json();
 
-  const handleComplete = async (rideId) => {
-    try {
-      const res = await fetch(
-        `http://localhost:5000/api/rides/${rideId}/complete`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+  if (res.ok) {
+    fetchPendingRides();
+  } else {
+    alert(data.error || 'Failed to accept ride');
+  }
+} catch (err) {
+  alert(t('serverError'));
+}
+};
+// Complete ride const handleComplete = async (rideId) => { try { const res = await fetch( http://localhost:5000/api/rides/${rideId}/complete, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: Bearer ${token}, }, } );
+  const data = await res.json();
 
-      const data = await res.json();
-
-      if (res.ok) {
-        fetchPendingRides();
-        fetchDriverLostItems();
-      } else {
-        alert(data.error || 'Failed to complete ride');
-      }
-    } catch (err) {
-      alert(t('serverError'));
-    }
-  };
-
-  const handleReply = async (itemId) => {
-    const reply = replies[itemId]?.trim();
-    const status = statuses[itemId] || 'not_found';
-
-    if (!reply) {
-      alert(t('replyRequired'));
-      return;
-    }
-
-    try {
-      const res = await fetch(
-        `http://localhost:5000/api/lost-items/${itemId}/reply`,
-        {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ reply, status }),
-        }
-      );
-
-      const data = await res.json();
-
-      if (res.ok) {
-        alert(t('replySent'));
-        setReplies((prev) => ({ ...prev, [itemId]: '' }));
-        fetchDriverLostItems();
-      } else {
-        alert(data.message || 'Failed to send reply');
-      }
-    } catch (err) {
-      alert(t('serverError'));
-    }
-  };
-
-  useEffect(() => {
+  if (res.ok) {
     fetchPendingRides();
     fetchDriverLostItems();
-
-    const interval = setInterval(() => {
-      fetchPendingRides();
-      fetchDriverLostItems();
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [token]);
-
-  if (loading) return <p>{t('loadingRides')}</p>;
-
-  return (
-    <div dir="auto">
-      <h2>{t('driverDashboard')}</h2>
-
-      {rides.length === 0 && <p>{t('noRidesAvailable')}</p>}
-
-      <ul>
-        {rides.map((ride) => (
-          <li
-            key={ride._id}
-            style={{
-              border: '1px solid #ddd',
-              margin: 8,
-              padding: 8,
-              borderRadius: 6,
-            }}
-          >
-            <strong>{t('pickup')}:</strong> {ride.pickup}
-            <br />
-
-            <strong>{t('dropoff')}:</strong> {ride.dropoff}
-            <br />
-
-            <strong>{t('status')}:</strong> {translateStatus(ride.status)}
-            <br />
-
-           <strong>وقت الحجز:</strong> {new Date(ride.createdAt).toLocaleString('ar-LY')}
-            
-            {ride.status === 'requested' && (
-              <button onClick={() => handleAccept(ride._id)}>
-                {t('acceptRide')}
-              </button>
-            )}
-
-            {ride.status === 'accepted' && (
-              <button onClick={() => handleComplete(ride._id)}>
-                {t('markCompleted')}
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
-
-      <hr />
-
-      <h2>{t('lostItemReports')}</h2>
-
-      {lostItems.length === 0 && <p>{t('noLostItems')}</p>}
-
-      {lostItems.map((item) => (
-        <div
-          key={item._id}
-          style={{
-            border: '1px solid #ddd',
-            margin: 8,
-            padding: 12,
-            borderRadius: 6,
-          }}
-        >
-          <p>
-            <strong>{t('lostItem')}:</strong> {item.description}
-          </p>
-
-          <p>
-            <strong>{t('pickup')}:</strong> {item.ride?.pickup}
-          </p>
-
-          <p>
-            <strong>{t('dropoff')}:</strong> {item.ride?.dropoff}
-          </p>
-
-          <p>
-            <strong>{t('rider')}:</strong>{' '}
-            {item.rider?.name || (t('unknown'))}
-          </p>
-
-          <p>
-            <strong>{t('status')}:</strong>{' '}
-            {translateStatus(item.status)}
-          </p>
-
-          {item.driverReply ? (
-            <p>
-              <strong>{t('yourReply')}:</strong> {item.driverReply}
-            </p>
-          ) : (
-            <>
-              <textarea
-                placeholder={t('writeReply')}
-                value={replies[item._id] || ''}
-                onChange={(e) =>
-                  setReplies((prev) => ({
-                    ...prev,
-                    [item._id]: e.target.value,
-                  }))
-                }
-                style={{
-                  width: '100%',
-                  minHeight: 80,
-                  marginBottom: 8,
-                }}
-              />
-
-              <select
-                value={statuses[item._id] || 'not_found'}
-                onChange={(e) =>
-                  setStatuses((prev) => ({
-                    ...prev,
-                    [item._id]: e.target.value,
-                  }))
-                }
-                style={{ marginRight: 8 }}
-              >
-                <option value="found">{t('found')}</option>
-                <option value="not_found">{t('notFound')}</option>
-              </select>
-
-              <button onClick={() => handleReply(item._id)}>
-                {t('sendReply')}
-              </button>
-            </>
-          )}
-        </div>
-      ))}
-    </div>
-  );
+  } else {
+    alert(data.
+error || 'Failed to complete ride');
+  }
+} catch (err) {
+  alert(t('serverError'));
 }
+};
+// Reply to lost item report const handleReply = async (itemId) => { const reply = replies[itemId]?.trim(); const status = statuses[itemId] || 'not_found';
+if (!reply) {
+  alert(t('replyRequired'));
+  return;
+}
+
+try {
+  const res = await fetch(
+    http://localhost:5000/api/lost-items/${itemId}/reply,
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: Bearer ${token},
+      },
+      body: JSON.stringify({ reply, status }),
+    }
+  );
+
+  const data = await res.json();
+
+  if (res.ok) {
+    alert(t('replySent'));
+    setReplies((prev) => ({ ...prev, [itemId]: '' }));
+    fetchDriverLostItems();
+  } else {
+    alert(data.message || 'Failed to send reply');
+  }
+} catch (err) {
+  alert(t('serverError'));
+}
+};
+useEffect(() => { fetchPendingRides(); fetchDriverLostItems();
+const interval = setInterval(() => {
+  fetchPendingRides();
+  fetchDriverLostItems();
+}, 5000);
+
+return () => clearInterval(interval);
+}, [token]);
+if (loading) return <p>{t('loadingRides')}</p>;
+return ( <div dir="auto"> <h2>{t('driverDashboard')}</h2>
+  {rides.length === 0 && <p>{t('noRidesAvailable')}</p>}
+
+  <ul>
+    {rides.map((ride) => (
+      <li
+        key={ride._id}
+        style={{
+          border: '1px solid #ddd',
+          margin: 8,
+          padding: 12,
+          borderRadius: 6,
+        }}
+      >
+        <strong>{t('pickup')}:</strong> {ride.pickup}
+        <br />
+
+        <strong>{t('dropoff')}:</strong> {ride.dropoff}
+        <br />
+
+        <strong>{t('status')}:</strong>{' '}
+        {translateStatus(ride.status)}
+        <br />
+
+        <strong>وقت الحجز:</strong>{' '}
+        {new Date(ride.createdAt).toLocaleString('ar-LY')}
+
+        <hr />
+
+        <strong>السعر الأصلي:</strong>{' '}
+        {ride.originalFare != null
+          ?or('Error fetching rides:',           : 'بانتظار حساب المسافة'}
+        <br />
+
+        <strong>أقل سعر مسموح:</strong>{' '}
+        {ride.minimumFare != null
+          ? ${ride.minimumFare} د.ل
+          : ride.originalFare != null
+            ? ${(ride.originalFare * 0.75).toFixed(2)} د.ل
+            : 'غير متاح حالياً'}
+        <br />
+
+        {ride.driverOffer != null && (
+          <>
+            <strong>عرض السائق:</strong> {ride.driverOffer} د.ل
+            <br />
+          </>
+        )}
+
+        {ride.riderOffer != null && (
+          <>
+            <strong>عرض الراكب:</strong> {ride.riderOffer} د.ل
+            <br />
+          </>
+        )}
+
+        {ride.status === 'requested' && !ride.fareAgreed && (
+          <>
+            {ride.originalFare != null && (
+              <>
+                <label>
+                  <strong>عرضك السعري (بالدينار):</strong>
+                </label>
+
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={offerInputs[ride._id] || ''}
+                  onChange={(e) =>
+                    setOfferInputs((prev) => ({
+                      ...prev,
+                      [ride._id]: e.target.value,
+                    }))
+                  }
+                  placeholder="أدخل السعر المقترح"
+                />
+
+                <button onClick={() => handleOffer(ride._id)}>
+                  إرسال عرض السعر
+                </button>
+              </>
+            )}
+
+            {ride.lastOfferBy === 'rider' && (
+              <button onClick={() => handleAgreeFare(ride._id)}>
+                قبول عرض الراكب
+              </button>
+            )}
+
+            {ride.lastOfferBy === 'driver' && (
+              <p>تم إرسال عرضك، بانتظار رد الراكب.</p>
+            )}
+
+            {!ride.lastOfferBy && (
+              <p>يمكنك تقديم أول عرض سعري لهذه الرحلة.</p>
+            )}
+          </>
+        )}
+
+        {ride.fareAgreed && ride.status === 'requested' && (
+          <>
+            <p>
+              <strong>السعر المتفق عليه:</strong>{' '}
+              {ride.finalFare} د.ل
+            </p>
+
+            <button onClick={() => handleAccept(ride.
+
+                                  _id)}>
+              {t('acceptRide')}
+            </button>
+          </>
+        )}
+
+        {ride.status === 'accepted' && (
+          <button onClick={() => handleComplete(ride._id)}>
+            {t('markCompleted')}
+          </button>
+        )}
+      </li>
+    ))}
+  </ul>
+
+  <hr />
+
+  <h2>{t('lostItemReports')}</h2>
+
+  {lostItems.length === 0 && <p>{t('noLostItems')}</p>}
+
+  {lostItems.map((item) => (
+    <div
+      key={item._id}
+      style={{
+        border: '1px solid #ddd',
+        margin: 8,
+        padding: 12,
+        borderRadius: 6,
+      }}
+    >
+      <p>
+        <strong>{t('lostItem')}:</strong> {item.description}
+      </p>
+
+      <p>
+        <strong>{t('pickup')}:</strong> {item.ride?.pickup}
+      </p>
+
+      <p>
+        <strong>{t('dropoff')}:</strong> {item.ride?.dropoff}
+      </p>
+
+      <p>
+        <strong>{t('rider')}:</strong>{' '}
+        {item.rider?.name || t('unknown')}
+      </p>
+
+      <p>
+        <strong>{t('status')}:</strong>{' '}
+        {translateStatus(item.status)}
+      </p>
+
+      {item.driverReply ? (
+        <p>
+          <strong>{t('yourReply')}:</strong> {item.driverReply}
+        </p>
+      ) : (
+        <>
+          <textarea
+            placeholder={t('writeReply')}
+            value={replies[item._id] || ''}
+            onChange={(e) =>
+              setReplies((prev) => ({
+                ...prev,
+                [item._id]: e.target.value,
+              }))
+            }
+            style={{
+              width: '100%',
+              minHeight: 80,
+              marginBottom: 8,
+            }}
+          />
+
+          <select
+            value={statuses[item._id] || 'not_found'}
+            onChange={(e) =>
+              setStatuses((prev) => ({
+                ...prev,
+                [item._id]: e.target.value,
+              }))
+            }
+            style={{ marginRight: 8 }}
+          >
+            <option value="found">{t('found')}</option>
+            <option value="not_found">{t('notFound')}</option>
+          </select>
+
+          <button onClick={() => handleReply(item._id)}>
+            {t('sendReply')}
+          </button>
+        </>
+      )}
+    </div>
+  ))}
+</div>
+); }              
+          
